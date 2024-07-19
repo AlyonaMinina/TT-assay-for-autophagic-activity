@@ -1,9 +1,9 @@
 #By default:
-# -files with names containing "823" will be considered WT
-# -files with names containing "824" will be considered KO
-# -If a file name contains "root" the organ will be set to Root, otherwise to Shoot
-# -files with names containing "mock" will be considered 0h time point
-# -time point values are taken from the file names as a value preceding letter "h"
+# -Files with names containing "823" will be considered WT
+# -Files with names containing "824" will be considered KO
+# -If a file name contains "root" the value in "organ" column will be set to Root, otherwise to Shoot
+# -Files with names containing "mock" will be considered 0h time point
+# -Time point values are taken from the file names as a substring found between space and the letter "h"
 
 
 # Install and load the packages
