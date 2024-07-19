@@ -3,7 +3,7 @@
 //Step by step:
 	//1. Create a folder with .czi images selected for analysis (do not export them as other file formats!)
 	//2. Drag and drop macro file into ImageJ to have access to the code
-	//3. If needed edit the default number of ROIs and their dimensions in the dialog window
+	//3. NB! make sure that at least one chennel is called "GFP". If needed edit the default number of ROIs and their dimensions in the dialog window
 	//4. The macro will open one image at a time and wait for the user to adjust ROI position size.
 	//5. After all ROIs are adjusted  -> click ok. The macro will process all ROIs present in the ROI Manager. The ROI.zip file will be saved for each image file individually, while quantification data will be compiled into a single file.csv containing information about image name, ROI number, ROI area in um2, fluorescence intensity in each channel (Integrated Density), mean intensity for the second channel (IntDen/area) and ratio of fluorescence intensity Ch2/Ch1
    //NB! You can rerun the macro on the same folder, in this case the script will automatically load the saved ROIs for corresponding image and offer you to adjust them. To enable this do not change content or names of the folders and subfolders you analyzed
@@ -183,9 +183,18 @@ for ( r=0; r<ROI_number; r++ ) {
 	Ch1_Int = parseInt(Ch1);
 	Ch2 = Table.get(Column_2, current_last_row,"Image Results");
 	Ch2_Int = parseInt(Ch2);
-	ratio = Ch2_Int/Ch1_Int;
+
+//Detect which of the channels contains GFP signal to determine how to calculate the ratio
+	if(Channel_1 == "GFP") {
+		ratio = Ch2_Int/Ch1_Int;
 	Column_3 = "Fluorescence ratio of "+ Channel_2 + " to " + Channel_1;
 	Table.set(Column_3, current_last_row, ratio, "Image Results");	
+		}
+	else {
+		ratio = Ch1_Int/Ch2_Int;
+	Column_3 = "Fluorescence ratio of "+ Channel_1 + " to " + Channel_2;
+	Table.set(Column_3, current_last_row, ratio, "Image Results");	
+		}
 	}
 
 //Save maxima quantification as .csv file and ROIs as a .zip file
