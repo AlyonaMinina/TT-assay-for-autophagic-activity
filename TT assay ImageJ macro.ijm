@@ -3,7 +3,7 @@
 //Step by step:
 	//1. Create a folder with .czi images selected for analysis (do not export them as other file formats!)
 	//2. Drag and drop macro file into ImageJ to have access to the code
-	//3. NB! make sure that at least one chennel is called "GFP". If needed edit the default number of ROIs and their dimensions in the dialog window
+	//3. Select which of the channels corresponds to GFP signal. If needed edit the default number of ROIs and their dimensions in the dialog window
 	//4. The macro will open one image at a time and wait for the user to adjust ROI position size.
 	//5. After all ROIs are adjusted  -> click ok. The macro will process all ROIs present in the ROI Manager. The ROI.zip file will be saved for each image file individually, while quantification data will be compiled into a single file.csv containing information about image name, ROI number, ROI area in um2, fluorescence intensity in each channel (Integrated Density), mean intensity for the second channel (IntDen/area) and ratio of fluorescence intensity Ch2/Ch1
    //NB! You can rerun the macro on the same folder, in this case the script will automatically load the saved ROIs for corresponding image and offer you to adjust them. To enable this do not change content or names of the folders and subfolders you analyzed
@@ -48,27 +48,33 @@ print("");
 		
 
 /// Request info from the user about the number and dimensions of the ROIs they wish to analyze
-Channel_1 = "GFP";	  
-Channel_2 = "RFP";
+
 number_of_ROIs = 1;
 ROI_height = 159;
 ROI_width = 159;
 
 Dialog.create("Please provide ROIs parameters for your images");
-Dialog.addString("Channel 1 name:", Channel_1);
-Dialog.addToSameRow();
-Dialog.addString("Channel 2 name:", Channel_2);
+Dialog.addChoice("GFP channel: ", newArray("Channel 1", "Channel 2"));
 Dialog.addNumber("Number of ROIs to be analyzed on each image:", number_of_ROIs);
 Dialog.addNumber("Dimensions of ROIs. ROI height in um:", ROI_height);
 Dialog.addNumber("ROI width in um:", ROI_width);
 Dialog.show();
 
-Channel_1 = Dialog.getString();
-Channel_2 = Dialog.getString();
-
 number_of_ROIs = Dialog.getNumber();
+GFP_ch = Dialog.getChoice();
 ROI_height = Dialog.getNumber();
 ROI_width = Dialog.getNumber();	
+
+
+if (GFP_ch =="Channel 1") {
+	Channel_1 = "GFP";	  
+	Channel_2 = "RFP";
+	}
+	else {Channel_1 = "RFP";	  
+		 Channel_2 = "GFP";
+		 
+	     }
+
 
 	
 //Create the table for all results
