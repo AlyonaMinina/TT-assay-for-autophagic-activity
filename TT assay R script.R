@@ -170,7 +170,6 @@ perform_analysis <- function(WT_only, trtm, output_dir) {
   
 }
 
-
 # Get the unique treatments
 unique_treatments <- unique(WT_only$Treatment)
 
@@ -180,8 +179,3 @@ for (trtm in unique_treatments) {
     perform_analysis(WT_only, trtm, output_dir)
   }
 }
-
-# # Perform analysis for each treatment
-# perform_analysis(WT_only, "AZD",output_dir)
-# perform_analysis(WT_only, "no_C",output_dir)
-# #perform_analysis(WT_only, "no_N",output_dir)
