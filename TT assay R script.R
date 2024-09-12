@@ -161,6 +161,7 @@ perform_analysis <- function(WT_only, trtm, output_dir) {
     theme_bw() +
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
     scale_fill_manual(values = c("#83D40F", "#EA9A16")) +
+    scale_y_continuous(limits = c(0, NA))+
     labs(title = paste0("WT, RFP/GFP ratio, ", trtm), x = "Elapsed time (h)", y = "RFP/GFP ratio")
   ggsave(file.path(output_dir,paste0("Box_plot_ratio_", trtm, ".pdf")), width = 5, height = 4)
   # Print the plot to RStudio’s Plots pane
@@ -174,6 +175,7 @@ perform_analysis <- function(WT_only, trtm, output_dir) {
     geom_text(data = Tukey_with_CLD, aes(x = Time_point_h, y = 2, label = cld), size = 3, vjust = -20, hjust = 0.5, position = position_dodge(width = 0.5)) +
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
     scale_fill_manual(values = c("#83D40F", "#EA9A16")) +
+    scale_y_continuous(limits = c(0, NA))+
     labs(title = paste0("WT, RFP/GFP ratio normalized to KO, ", trtm), x = "Elapsed time (h)", y = "Normalized RFP/GFP ratio")
   ggsave(file.path(output_dir,paste0("Box_plot_normalized_ratio_", trtm, ".pdf")), width = 5, height = 4)
   # Print the plot to RStudio’s Plots pane
