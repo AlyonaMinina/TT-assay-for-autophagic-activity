@@ -1,150 +1,198 @@
 #By default:
-# -files with names containing "823" will be considered WT
-# -files with names containing "824" will be considered KO
-# -If a file name contains "root" the organ will be set to Root, otherwise to Shoot
-# -files with names containing "mock" will be considered 0h time point
-# -time point values are taken from the file names as a value preceding letter "h"
+# -Files with names containing "823" will be considered WT
+# -Files with names containing "824" will be considered KO
+# -If a file name contains "root" the value in "organ" column will be set to Root, otherwise to Shoot
+# -Files with names containing "mock" will be considered 0h time point
+# -Time point values are taken from the file names as a substring found between space and the letter "h"
 
 
-#Install and load the packages
-  #install.packages("dplyr")
-  #install.packages("plyr")
-  #install.packages("readr")
-  #install.packages(data.table)
-  #install.packages("stringr")
-  #install.packages("purrr")
-  #install.packages("ggplot2")
-  #install.packages("palmerpenguins")
-  #install.packages("emmeans")
-  #install.packages("multcomp")
-  #install.packages("multcompView")
-  library(plyr)
-  library(dplyr)
-  library(readr)
-  library(data.table)
-  library(stringr)
-  library(purrr)
-  library(ggplot2)
-  library(stats)
-  library(palmerpenguins)
-  library(emmeans)
-  library(multcomp)
-  library(multcompView)
+# Install and load the packages
+
+install_and_load <- function(package_name) {
+  if (!require(package_name, character.only = TRUE)) {
+    install.packages(package_name, dependencies = TRUE)
+    library(package_name, character.only = TRUE)
+  }
+}
+
+# List of required packages
+required_packages <- c("dplyr", "ggplot2", "stringr", "readr", "data.table", "plyr", "purrr", "emmeans", "multcomp", "multcompView", "palmerpenguins")
+
+# Install and load all required packages
+lapply(required_packages, install_and_load)
+
 
 # Ask user to select the experiment directory
-  Experiment_dir <- choose.dir(default = "", caption = "Select folder")
+Experiment_dir <- choose.dir(default = "", caption = "Select folder")
+
+
+# Create a timestamped subfolder
+timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+output_dir <- file.path(Experiment_dir, paste0("R_analysis_", timestamp))
+dir.create(output_dir)
 
 # Set the experiment folder as the working directory
-  setwd(Experiment_dir)
+setwd(Experiment_dir)
 
-# List all .csv files in the experiment directory
-  csv_file_list <- list.files(path = Experiment_dir,
+# List all .csv files in the experiment directory, excluding subfolders with results
+csv_file_list <- list.files(path = Experiment_dir,
                             recursive = TRUE,
-                            pattern = "\\.csv$")
+                            pattern = "\\.csv$",
+                            full.names = TRUE) %>%
+  
+  # Filter out files that are in directories containing "R_analysis_" in the name
+  .[!grepl("R_analysis_", dirname(.))]
 
-# merge the .csv files and save the merged results
-  merged_results <- csv_file_list %>%
+
+# Merge the .csv files and save the merged results
+merged_results <- csv_file_list %>%
   lapply(read_csv) %>%
   bind_rows
-  
-# Replace spaces in the column names with underscores, add columns for the time point, organ and genotype
-  colnames(merged_results) <- gsub(" ","_", colnames(merged_results))
-  merged_results <- merged_results %>%
-  mutate(Genotype = if_else(str_detect(File_name, '823'), 'WT', 'KO'))
-  merged_results <- merged_results %>%
-  mutate(Organ = if_else(str_detect(File_name, 'root'), 'Root', 'Shoot'))
-  merged_results <- merged_results %>%
-  mutate(Time_point_h = if_else(str_detect(File_name, 'mock'), '0', NA_character_))
-  merged_results <- merged_results %>%
-  mutate(Time_point_h = ifelse(str_detect(File_name, 'h'), sub('h.*', '', File_name), Time_point_h))
+
+# Replace spaces in the column names with underscores, add columns for the time point, organ, and genotype
+colnames(merged_results) <- gsub(" ","_", colnames(merged_results))
+merged_results <- merged_results %>%
+  mutate(Genotype = if_else(str_detect(File_name, '823'), 'WT', 'KO'),
+         Organ = if_else(str_detect(File_name, 'root'), 'Root', 'Shoot'),
+         Time_point_h = str_extract(File_name, "\\d+(?=h)"),
+         Treatment = case_when(
+           str_detect(File_name, 'AZD') ~ 'AZD',
+           str_detect(File_name, '-N') ~ 'no_N',
+           str_detect(File_name, '-C') ~ 'no_C',
+           str_detect(File_name, 'mock') ~ 'mock',
+           TRUE ~ NA_character_))
+
+merged_results <- merged_results %>%
+  mutate(Time_point_h = if_else(str_detect(File_name, 'mock'), '0', Time_point_h))
 
 
-# Calculate the mean value for KO for each time point and organ
-  KO_mean <- merged_results %>%
-  filter(Genotype == "KO") %>%
-  group_by(Organ, Time_point_h) %>%
-  summarise_at(vars(Fluorescence_ratio_of_RFP_to_GFP), mean)
-# Rename the column of the KO mean
-  colnames(KO_mean)[colnames(KO_mean) == "Fluorescence_ratio_of_RFP_to_GFP"] <- "Mean_ratio_for_KO"
- 
-# Merge mean_KO data frame wit the original data frame, organized based on "Organ" and "Time_point_h"
-  KO_mean_data <- merged_results %>%
-  inner_join(KO_mean, by = c("Organ", "Time_point_h"))
-  
+# Calculate the mean value for KO for each time point, organ, and treatment
+KO_mean <- merged_results %>%
+  filter(Genotype == "KO") 
+
+# Calculate mean for each treatment/time point
+KO_mean <- aggregate(Fluorescence_ratio_of_RFP_to_GFP ~ Organ + Time_point_h + Treatment,
+                     data = KO_mean,
+                     FUN = mean, na.rm = TRUE)
+KO_mean <- KO_mean %>%
+  dplyr::rename(Mean_ratio_for_KO = Fluorescence_ratio_of_RFP_to_GFP)
+
+
+# Merge mean_KO data frame with the original data frame, organized based on "Organ", "Treatment" and "Time_point_h"
+KO_mean_data <- merged_results %>%
+  inner_join(KO_mean, by = c("Organ", "Time_point_h", "Treatment"))
+
 # Normalize the RFP/GFP ratio to the mean value obtained for the KO in the same organ, at the same time point
-  normalized_data <- KO_mean_data %>%
+normalized_data <- KO_mean_data %>%
   mutate(Normalized_ratio = Fluorescence_ratio_of_RFP_to_GFP / Mean_ratio_for_KO)
-  write.csv(normalized_data, "Merged results.csv")
+
+write.csv(normalized_data,file.path(output_dir, "Merged_results.csv"))
+
+# Run Two-way-Anova and Tukey's HSD test on the normalized ratios for WT
+WT_only <- normalized_data %>%
+  filter(Genotype == "WT")
+
+# Log-transform the Normalized_ratio column for Anova test
+WT_only <- WT_only %>%
+  mutate(Log_Normalized_ratio = log(Normalized_ratio))
+
+# Save the modified dataframe as a CSV file
+write.csv(WT_only, file.path(output_dir,"Merged_results_for_WT_only.csv"))
+
+# Dynamically determine the levels for Time_point_h
+time_points <- sort(unique(as.numeric(normalized_data$Time_point_h)))
+normalized_data$Time_point_h <- factor(normalized_data$Time_point_h, levels = as.character(time_points))
+
+# Run comparisons for each treatment
+perform_analysis <- function(WT_only, trtm, output_dir) {
   
-#Run statistics
-  # Run Two-way-Anova and Tukey's HSD test on the normalized ratios for WT
-    WT_only <- normalized_data %>%
-    filter(Genotype == "WT")
-    
-    # Log-transform the Normalized_ratio column for Anova test
-    WT_only <- WT_only %>%
-    mutate(Log_Normalized_ratio = log(Normalized_ratio))
-    
-    # Save the modified dataframe as a CSV file
-    write.csv(WT_only, "Merged results for WT only.csv")
-    
-    # Run anlaysis of variance by Two-way Anova
-    Two_way_Anova <- aov(Log_Normalized_ratio ~ Time_point_h * Organ, data = WT_only)
-   
-    # Run means comparison by Tukey's HSD test
-    Tukey <- TukeyHSD(Two_way_Anova)
-    
-    
+  # Sort by treatment and Ensure that 'mock' is included in the data
+  filtered_data <- data_for_analysis %>%
+    filter(Treatment == trtm | Treatment == "mock")
+  
+  
+  # Run analysis of variance by Two-way Anova
+  Two_way_Anova <- aov(Log_Normalized_ratio ~ Time_point_h * Organ, data = filtered_data)
+  
+  # Run means comparison by Tukey's HSD test
+  Tukey <- TukeyHSD(Two_way_Anova)
+  
   # Add CLD column to the summary stats
-    cld <-multcompLetters4(Two_way_Anova,Tukey)  
-    print(cld)
-    
+  cld <- multcompLetters4(Two_way_Anova, Tukey)  
+  print(cld)
+  
   # Create a table with factors and 3rd quantile
-    Tukey_with_CLD <- WT_only %>%
-      group_by(Time_point_h, Organ) %>%
-      summarise(mean = mean(Log_Normalized_ratio), quant = quantile(Log_Normalized_ratio, probs = 0.75)) %>%
-      arrange(desc(mean))
-    
-    # Add CLD to the Tk table
-    cld_df <- as.data.frame.list(cld$`Time_point_h:Organ`)
-    Tukey_with_CLD$cld <- cld_df$Letters
-    write.csv(Tukey_with_CLD, "Tukey_with_CLD.csv")
-    
-
-
-# Build box plots for WT ratios
+  Tukey_with_CLD <- filtered_data %>%
+    group_by(Time_point_h, Organ) %>%
+    dplyr::summarise(mean = mean(Log_Normalized_ratio), quant = quantile(Log_Normalized_ratio, probs = 0.75), .groups = 'drop') %>%
+    arrange(desc(mean))
+  
+  # Add CLD to the Tk table
+  cld_df <- as.data.frame.list(cld$`Time_point_h:Organ`)
+  Tukey_with_CLD$cld <- cld_df$Letters
+  write.csv(Tukey_with_CLD, file.path(output_dir,  paste0("Tukey_with_CLD_", trtm, ".csv")))
+  
+  
+  # Build box plots for WT ratios
+  # filter normalized data by treatment
+  normalized_filtered_data <- normalized_data %>%
+    filter(Treatment == trtm | Treatment == "mock")
+  normalized_filtered_data <- as.data.frame(normalized_filtered_data)
+  
   
   # Sort organ categories
-    normalized_data$Organ <- factor(normalized_data$Organ,c("Shoot", "Root"))
+  normalized_filtered_data$Organ <- factor(normalized_filtered_data$Organ, c("Shoot", "Root"))
   
   # Ensure CLDs are sorted the same way as the organ categories
-    Tukey_with_CLD$Organ <- factor(Tukey_with_CLD$Organ, levels = c("Shoot", "Root"))
+  Tukey_with_CLD$Organ <- factor(Tukey_with_CLD$Organ, levels = c("Shoot", "Root"))
   
-  # Ensure that time points are taken in numerical order
-    normalized_data$Time_point_h <- factor(normalized_data$Time_point_h, c("0", "2", "16", "24", "36", "48"))
- 
+  
+  
   # Ensure only WT ratios are plotted
-    WT_only <- normalized_data %>%
+  filtered_data <- normalized_filtered_data %>%
     filter(Genotype == "WT")
+  filtered_data <- as.data.frame(filtered_data)
+  
+  
+  # Build a box plot on WT ratios
+  p1<-ggplot(filtered_data , aes(Time_point_h, Fluorescence_ratio_of_RFP_to_GFP, fill = Organ)) +
+    geom_boxplot(width = 0.5, size = 0.15, outlier.shape = 1, outlier.size = 1) +
+    geom_text(data = Tukey_with_CLD, aes(x = Time_point_h, y = 3, label = cld), size = 3, vjust = -10, hjust = 0.5, position = position_dodge(width = 0.5)) +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+    scale_fill_manual(values = c("#83D40F", "#EA9A16")) +
+    labs(title = paste0("WT, RFP/GFP ratio, ", trtm), x = "Elapsed time (h)", y = "RFP/GFP ratio")
+  ggsave(file.path(output_dir,paste0("Box_plot_ratio_", trtm, ".pdf")), width = 5, height = 4)
+  # Print the plot to RStudio’s Plots pane
+  print(p1)
+  
+  
+  # Build a box plot normalized WT ratios
+  p2<-ggplot(filtered_data , aes(Time_point_h, Normalized_ratio, fill = Organ)) +
+    geom_boxplot(width = 0.5, size = 0.15, outlier.shape = 1, outlier.size = 1) +
+    theme_bw() + 
+    geom_text(data = Tukey_with_CLD, aes(x = Time_point_h, y = 2, label = cld), size = 3, vjust = -20, hjust = 0.5, position = position_dodge(width = 0.5)) +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+    scale_fill_manual(values = c("#83D40F", "#EA9A16")) +
+    labs(title = paste0("WT, RFP/GFP ratio normalized to KO, ", trtm), x = "Elapsed time (h)", y = "Normalized RFP/GFP ratio")
+  ggsave(file.path(output_dir,paste0("Box_plot_normalized_ratio_", trtm, ".pdf")), width = 5, height = 4)
+  # Print the plot to RStudio’s Plots pane
+  print(p2)
+  
+}
+
+# Get the unique treatments, excluding 'mock'
+unique_treatments <- unique(WT_only$Treatment[WT_only$Treatment != "mock"])
+
+# Perform analysis for each unique treatment, including 'mock' in the analysis
+for (trtm in unique_treatments) {
+  if (!is.na(trtm)) {
     
-  #build a box plot on WT ratios
-      ggplot(WT_only , aes(Time_point_h, Fluorescence_ratio_of_RFP_to_GFP, fill = Organ)) +
-      geom_boxplot(width = 0.5, size = 0.15,outlier.shape = 1, outlier.size = 1) +
-      geom_text(data = Tukey_with_CLD, aes(x = Time_point_h, y = 3, label = cld), size = 3, vjust=-10, hjust =0.5, position = position_dodge(width = 0.5)) +
-      theme_bw() +
-      theme(panel.grid.major = element_line(size = 0.1),panel.grid.minor = element_line(size = 0.1)) +
-      scale_fill_manual(values = c("#83D40F", "#EA9A16")) +
-      labs(title = "WT, RFP/GFP ratio", x = "Elapsed time (h)", y = "RFP/GFP ratio")
-      ggsave("Box_plot_ratio.pdf", width = 5, height = 4)
+    # Subset the data for the current treatment and 'mock'
+    data_for_analysis <- WT_only %>%
+      filter(Treatment == trtm | Treatment == "mock")
     
-    
-    
-    #build a box plot normalized WT ratios
-      ggplot(WT_only , aes(Time_point_h, Normalized_ratio, fill = Organ)) +
-      geom_boxplot(width = 0.5, size = 0.15,outlier.shape = 1, outlier.size = 1) +
-      theme_bw() + 
-      geom_text(data = Tukey_with_CLD, aes(x = Time_point_h, y = 2, label = cld), size = 3, vjust=-20, hjust =0.5, position = position_dodge(width = 0.5)) +
-      theme(panel.grid.major = element_line(size = 0.1),panel.grid.minor = element_line(size = 0.1))+
-      scale_fill_manual(values = c("#83D40F", "#EA9A16"))+
-      labs(title = "WT, RFP/GFP ratio normalized to KO", x = "Elapsed time (h)", y = "Normalized RFP/GFP ratio")
-      ggsave("Box_plot_normalized_ratio.pdf", width = 5, height = 4)
+    # Perform analysis on the combined data (current treatment + 'mock')
+    perform_analysis(data_for_analysis, trtm, output_dir)
+  }
+}
