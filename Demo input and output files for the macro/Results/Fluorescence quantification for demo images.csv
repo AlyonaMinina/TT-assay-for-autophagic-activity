@@ -1,0 +1,4 @@
+File name;ROI number;Area in um2;IntDen RFP;IntDen GFP;Fluorescence ratio of RFP to GFP
+mock 823 root 1 image 1;1;20011.404;42555818.178;34987651.002;1.216
+AZD 2h 823 root 1 image 1;1;13614.724;53234346.523;36563465.163;1.456
+-N 2h 823 root 1 image 1;1;14347.380;35606708.387;7220268.462;4.931
